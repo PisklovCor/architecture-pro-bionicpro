@@ -116,6 +116,7 @@ services:
       - ./crm-data:/var/lib/postgresql/data
     ports:
       - "5434:5432"
+    command: postgres -c wal_level=logical -c max_replication_slots=4 -c max_wal_senders=4
     networks:
       - bionicpro-network
 
@@ -143,10 +144,14 @@ services:
       CLICKHOUSE_PASSWORD: clickhouse_password
     volumes:
       - ./clickhouse-data:/var/lib/clickhouse
-      - ./Task2/db-init/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./Task2/db-init/clickhouse-init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./Task4/db-init/clickhouse-cdc-init.sql:/docker-entrypoint-initdb.d/02-cdc-init.sql
     ports:
       - "8123:8123"
       - "9000:9000"
+    depends_on:
+      kafka:
+        condition: service_started
     networks:
       - bionicpro-network
 
@@ -276,6 +281,58 @@ services:
       - clickhouse
       - bionicpro-auth
       - minio
+    networks:
+      - bionicpro-network
+
+  # Zookeeper для Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - bionicpro-network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - bionicpro-network
+
+  # Debezium Connect
+  debezium-connect:
+    image: debezium/connect:2.4
+    ports:
+      - "8084:8083"
+    depends_on:
+      - kafka
+      - crm_db
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+    volumes:
+      - ./Task4/debezium/connectors:/kafka/connect
     networks:
       - bionicpro-network
 
