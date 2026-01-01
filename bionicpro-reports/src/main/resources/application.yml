@@ -1,0 +1,25 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: bionicpro-reports
+
+clickhouse:
+  host: ${CLICKHOUSE_HOST:localhost}
+  port: ${CLICKHOUSE_PORT:9000}
+  database: ${CLICKHOUSE_DB:reports_db}
+  username: ${CLICKHOUSE_USER:clickhouse_user}
+  password: ${CLICKHOUSE_PASSWORD:clickhouse_password}
+
+auth:
+  service-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8080}
+    realm: ${KEYCLOAK_REALM:reports-realm}
+
+logging:
+  level:
+    com.bionicpro.reports: DEBUG
+    org.springframework.security: DEBUG
+

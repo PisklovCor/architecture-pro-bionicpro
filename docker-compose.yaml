@@ -104,6 +104,141 @@ services:
     networks:
       - bionicpro-network
 
+  # CRM Database (PostgreSQL)
+  crm_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: crm_db
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    volumes:
+      - ./Task2/db-init/crm-init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./crm-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - bionicpro-network
+
+  # Telemetry Database (PostgreSQL)
+  telemetry_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: telemetry_db
+      POSTGRES_USER: telemetry_user
+      POSTGRES_PASSWORD: telemetry_password
+    volumes:
+      - ./Task2/db-init/telemetry-init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./telemetry-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - bionicpro-network
+
+  # ClickHouse OLAP Database
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    environment:
+      CLICKHOUSE_DB: reports_db
+      CLICKHOUSE_USER: clickhouse_user
+      CLICKHOUSE_PASSWORD: clickhouse_password
+    volumes:
+      - ./clickhouse-data:/var/lib/clickhouse
+      - ./Task2/db-init/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - bionicpro-network
+
+  # Airflow Postgres (для метаданных Airflow)
+  airflow_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - ./airflow-db-data:/var/lib/postgresql/data
+    networks:
+      - bionicpro-network
+
+  # Airflow Redis (для CeleryExecutor, если используется)
+  airflow_redis:
+    image: redis:7-alpine
+    networks:
+      - bionicpro-network
+
+  # Airflow Webserver
+  airflow_webserver:
+    image: apache/airflow:2.8.0
+    command: webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    volumes:
+      - ./Task2/airflow/dags:/opt/airflow/dags
+      - ./Task2/airflow/logs:/opt/airflow/logs
+      - ./Task2/airflow/plugins:/opt/airflow/plugins
+      - ./Task2/airflow/config:/opt/airflow/config
+    ports:
+      - "8082:8080"
+    depends_on:
+      - airflow_db
+    networks:
+      - bionicpro-network
+
+  # Airflow Scheduler
+  airflow_scheduler:
+    image: apache/airflow:2.8.0
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    volumes:
+      - ./Task2/airflow/dags:/opt/airflow/dags
+      - ./Task2/airflow/logs:/opt/airflow/logs
+      - ./Task2/airflow/plugins:/opt/airflow/plugins
+      - ./Task2/airflow/config:/opt/airflow/config
+    depends_on:
+      - airflow_db
+      - airflow_webserver
+    networks:
+      - bionicpro-network
+
+  # Reports Service
+  bionicpro-reports:
+    build:
+      context: ./bionicpro-reports
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_DB: reports_db
+      CLICKHOUSE_USER: clickhouse_user
+      CLICKHOUSE_PASSWORD: clickhouse_password
+      AUTH_SERVICE_URL: http://bionicpro-auth:8081
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: reports-realm
+    depends_on:
+      - clickhouse
+      - bionicpro-auth
+    networks:
+      - bionicpro-network
+
 networks:
   bionicpro-network:
     driver: bridge

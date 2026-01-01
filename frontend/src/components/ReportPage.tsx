@@ -24,22 +24,29 @@ const ReportPage: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${API_URL}/reports`, {
+      const response = await fetch(`${API_URL}/api/reports`, {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         },
         credentials: 'include'
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download report');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || 'Failed to get report';
+        throw new Error(errorMessage);
       }
 
-      const blob = await response.blob();
+      const reportData = await response.json();
+      
+      // Создаём JSON файл для скачивания
+      const jsonString = JSON.stringify(reportData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'report.pdf';
+      a.download = `prosthesis-report-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
