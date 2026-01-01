@@ -11,6 +11,9 @@ services:
       - ./postgres-keycloak-data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
+    networks:
+      - bionicpro-network
+
   keycloak:
     image: quay.io/keycloak/keycloak:21.1
     environment:
@@ -29,6 +32,61 @@ services:
       - "8080:8080"
     depends_on:
       - keycloak_db
+    networks:
+      - bionicpro-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - bionicpro-network
+
+  openldap:
+    image: osixia/openldap:1.5.0
+    environment:
+      LDAP_ORGANISATION: "BionicPRO"
+      LDAP_DOMAIN: "example.com"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_READONLY_USER: "false"
+      LDAP_RFC2307BIS_SCHEMA: "false"
+      LDAP_BACKEND: "mdb"
+      LDAP_TLS: "false"
+      LDAP_REPLICATION: "false"
+    volumes:
+      - ./ldap/config.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/50-bootstrap.ldif
+      - ./ldap-data:/var/lib/ldap
+      - ./ldap-config-data:/etc/ldap/slapd.d
+    ports:
+      - "389:389"
+      - "636:636"
+    networks:
+      - bionicpro-network
+
+  bionicpro-auth:
+    build:
+      context: ./bionicpro-auth
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: reports-realm
+      KEYCLOAK_CLIENT_ID: bionicpro-auth
+      KEYCLOAK_CLIENT_SECRET: bionicpro-auth-secret-change-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-default-encryption-key-change-in-production}
+    depends_on:
+      - keycloak
+      - redis
+    networks:
+      - bionicpro-network
+
   frontend:
     build:
       context: ./frontend
@@ -37,6 +95,15 @@ services:
       - "3000:3000"
     environment:
       REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_AUTH_SERVICE_URL: http://localhost:8081
       REACT_APP_KEYCLOAK_URL: http://localhost:8080
       REACT_APP_KEYCLOAK_REALM: reports-realm
       REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
+    depends_on:
+      - bionicpro-auth
+    networks:
+      - bionicpro-network
+
+networks:
+  bionicpro-network:
+    driver: bridge

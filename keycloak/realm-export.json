@@ -1,6 +1,12 @@
 {
     "realm": "reports-realm",
     "enabled": true,
+    "accessTokenLifespan": 120,
+    "accessTokenLifespanForImplicitFlow": 120,
+    "ssoSessionIdleTimeout": 7200,
+    "ssoSessionMaxLifespan": 7200,
+    "accessCodeLifespan": 60,
+    "accessCodeLifespanUserAction": 300,
     "roles": {
       "realm": [
         {
@@ -17,6 +23,14 @@
         }
       ]
     },
+    "requiredCredentials": ["password", "otp"],
+    "otpPolicyType": "totp",
+    "otpPolicyAlgorithm": "HmacSHA1",
+    "otpPolicyInitialCounter": 0,
+    "otpPolicyDigits": 6,
+    "otpPolicyLookAheadWindow": 1,
+    "otpPolicyPeriod": 30,
+    "otpSupportedApplications": ["totpAppGoogleName", "totpAppFreeOTPName"],
     "users": [
       {
         "username": "user1",
@@ -116,7 +130,29 @@
         "publicClient": true,
         "redirectUris": ["http://localhost:3000/*"],
         "webOrigins": ["http://localhost:3000"],
-        "directAccessGrantsEnabled": true
+        "directAccessGrantsEnabled": true,
+        "standardFlowEnabled": true,
+        "implicitFlowEnabled": false,
+        "attributes": {
+          "pkce.code.challenge.method": "S256"
+        },
+        "protocol": "openid-connect",
+        "defaultClientScopes": ["web-origins", "role_list", "profile", "roles", "email"],
+        "optionalClientScopes": ["offline_access"]
+      },
+      {
+        "clientId": "bionicpro-auth",
+        "enabled": true,
+        "publicClient": false,
+        "clientAuthenticatorType": "client-secret",
+        "secret": "bionicpro-auth-secret-change-in-production",
+        "redirectUris": ["http://localhost:8081/*"],
+        "webOrigins": ["http://localhost:8081"],
+        "standardFlowEnabled": true,
+        "directAccessGrantsEnabled": true,
+        "protocol": "openid-connect",
+        "defaultClientScopes": ["web-origins", "role_list", "profile", "roles", "email"],
+        "optionalClientScopes": ["offline_access"]
       },
       {
         "clientId": "reports-api",
@@ -124,6 +160,95 @@
         "clientAuthenticatorType": "client-secret",
         "secret": "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq", 
         "bearerOnly": true
+      }
+    ],
+    "identityProviders": [
+      {
+        "alias": "yandex",
+        "providerId": "oidc",
+        "enabled": true,
+        "updateProfileFirstLoginMode": "on",
+        "trustEmail": false,
+        "storeToken": false,
+        "addReadTokenRoleOnCreate": false,
+        "authenticateByDefault": false,
+        "linkOnly": false,
+        "firstBrokerLoginFlowAlias": "first broker login",
+        "config": {
+          "clientId": "${YANDEX_CLIENT_ID}",
+          "clientSecret": "${YANDEX_CLIENT_SECRET}",
+          "authorizationUrl": "https://oauth.yandex.ru/authorize",
+          "tokenUrl": "https://oauth.yandex.ru/token",
+          "userInfoUrl": "https://login.yandex.ru/info",
+          "issuer": "https://oauth.yandex.ru",
+          "defaultScope": "openid profile email",
+          "useJwksUrl": "true",
+          "jwksUrl": "https://oauth.yandex.ru/.well-known/jwks.json",
+          "validateSignature": "true",
+          "backchannelSupported": "false"
+        }
+      }
+    ],
+    "authenticationFlows": [
+      {
+        "alias": "browser",
+        "description": "browser based authentication",
+        "providerId": "basic-flow",
+        "topLevel": true,
+        "builtIn": true,
+        "authenticationExecutions": [
+          {
+            "authenticator": "auth-cookie",
+            "requirement": "ALTERNATIVE",
+            "priority": 10,
+            "userSetupAllowed": false,
+            "authenticationFlow": false
+          },
+          {
+            "authenticator": "auth-spnego",
+            "requirement": "DISABLED",
+            "priority": 20,
+            "userSetupAllowed": false,
+            "authenticationFlow": false
+          },
+          {
+            "authenticator": "identity-provider-redirector",
+            "requirement": "ALTERNATIVE",
+            "priority": 25,
+            "userSetupAllowed": false,
+            "authenticationFlow": false
+          },
+          {
+            "flowAlias": "forms",
+            "requirement": "ALTERNATIVE",
+            "priority": 30,
+            "userSetupAllowed": false,
+            "authenticationFlow": true
+          }
+        ]
+      },
+      {
+        "alias": "forms",
+        "description": "Username, password, otp and other auth forms.",
+        "providerId": "basic-flow",
+        "topLevel": false,
+        "builtIn": true,
+        "authenticationExecutions": [
+          {
+            "authenticator": "auth-username-password-form",
+            "requirement": "REQUIRED",
+            "priority": 10,
+            "userSetupAllowed": false,
+            "authenticationFlow": false
+          },
+          {
+            "authenticator": "auth-otp-form",
+            "requirement": "REQUIRED",
+            "priority": 20,
+            "userSetupAllowed": false,
+            "authenticationFlow": false
+          }
+        ]
       }
     ]
   }
